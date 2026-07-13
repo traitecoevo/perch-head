@@ -10,6 +10,14 @@ current defaults in `docs/training.md`. It was written incrementally as a protot
 reflects that origin (e.g. "the eval," "the fork") which now means "the `soundscape-eval`
 comparison harness" and "the BirdNET-Analyzer fork" respectively, both sibling repos.
 
+**Update, 2026-07-14 (dependency removal):** at graduation, this repo also dropped its
+runtime dependency on the BirdNET-Analyzer fork — the Perch checkpoint is now fetched
+directly via `kagglehub` and audio windowing is a self-contained, behavior-equivalent port
+(`perch_head/audio.py`). Every reference below to "the fork's `audio.py`" or "BirdNET-
+Analyzer's Perch checkpoint" describes where this logic *originated*, not a current
+dependency — see `CLAUDE.md` for exactly what changed and why it was kept
+behavior-equivalent (embeddings must stay consistent with the already-trained heads).
+
 ## 1. The one question this answers
 
 Does a custom classifier head trained on **Perch** embeddings clear the ~0.18 AUPRC

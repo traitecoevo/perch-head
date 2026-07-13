@@ -12,11 +12,15 @@ reusable training + inference pipeline.
 scores saved audio, expects human review) — not a real-time/edge/on-device recognizer. See
 `docs/inference.md`.
 
+Standalone — no BirdNET-Analyzer dependency. The Perch checkpoint is fetched via
+`kagglehub` on first use and audio windowing is self-contained (`perch_head/audio.py`).
+
 ## Quickstart
 
 ```bash
-pip install -e /path/to/BirdNET-Analyzer   # provides the Perch checkpoint + audio I/O
 pip install -e .
+# First run downloads the Perch v2 checkpoint via kagglehub (cached after that);
+# set PERCH_MODEL_PATH to point at an existing local copy instead if you have one.
 
 # 1. Extract Perch embeddings from your clip library (one-time, cached)
 python scripts/extract_embeddings.py \
@@ -40,7 +44,8 @@ reasoning behind the recommended defaults.
 ## Repo layout
 
 ```
-perch_head/           importable library: embed.py (Perch embedding), inference.py (head + scoring)
+perch_head/           importable library: embed.py (Perch checkpoint + embedding),
+                       audio.py (self-contained loading/windowing), inference.py (head + scoring)
 scripts/               CLIs: extract_embeddings.py, train_head.py, predict.py
 configs/species/       example species lists (extraction input)
 docs/                  training.md, inference.md, design_plan.md (design + experiment record)
@@ -48,9 +53,10 @@ docs/                  training.md, inference.md, design_plan.md (design + exper
 
 ## Relationship to sibling repos
 
-- **BirdNET-Analyzer** (this project's `birdnet_analyzer` dependency) — provides the frozen
-  Perch v2 checkpoint and audio I/O (`open_audio_file`/`split_signal`). Install it editable;
-  this repo does not vendor or modify it.
+- **BirdNET-Analyzer** — no runtime dependency. This project originally reused
+  BirdNET-Analyzer's local Perch checkpoint path and audio I/O; both were replaced
+  (2026-07-14) with a direct `kagglehub` fetch and a self-contained `perch_head/audio.py`
+  so the repo works for anyone without that fork installed.
 - **soundscape-eval** — the multi-model comparison harness this project's result was
   originally prototyped inside (`docs/design_plan.md` §1–3). It still owns model-comparison
   evaluation (labeled-soundscape scoring, metrics, figures) and has its own small,

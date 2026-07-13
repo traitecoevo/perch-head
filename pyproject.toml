@@ -13,11 +13,10 @@ dependencies = [
     "keras",
     "tensorflow",
     "scikit-learn",
-    # Perch checkpoint + audio I/O (open_audio_file/split_signal). Install from the
-    # BirdNET-Analyzer fork, editable, e.g.:
-    #   pip install -e /path/to/BirdNET-Analyzer
-    # Listed here for documentation; not installable from PyPI.
-    # "birdnet_analyzer",
+    "librosa",
+    "soundfile",
+    "resampy",       # librosa's res_type="kaiser_fast" resampler
+    "kagglehub",     # fetches the Perch v2 checkpoint (google/bird-vocalization-classifier)
 ]
 
 [project.optional-dependencies]

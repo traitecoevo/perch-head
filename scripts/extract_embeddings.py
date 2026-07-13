@@ -1,10 +1,10 @@
 """Extract Perch embeddings from a training-clip library -> a cached npz for head training.
 
 Walks a call/clip library (one folder per class, folder name "Genus species_Common Name"
-by convention) and feeds each clip through Perch: `audio.open_audio_file(path, 32000)` +
-`audio.split_signal(sig, 32000, 5.0, 0, SIG_MINLEN)` (zero-pads short clips to 5 s,
-end-aligned, no peak-normalization) -> `perch_embed()` -> the 1536-d penultimate embedding.
-Caches (X, Y) so a head can be trained on it repeatedly without re-running Perch.
+by convention) and feeds each clip through Perch: `perch_head.audio.open_audio_file` +
+`split_signal` (zero-pads short clips to 5 s, end-aligned, no peak-normalization) ->
+`perch_embed()` -> the 1536-d penultimate embedding. Caches (X, Y) so a head can be trained
+on it repeatedly without re-running Perch.
 
 Three class roles, each getting a column (or none, for non-events) in the label matrix Y:
   * PRESENT      — species you actually want to detect (e.g. the species confirmed in a
@@ -39,9 +39,7 @@ import random
 
 import numpy as np
 
-import birdnet_analyzer.config as cfg
-from birdnet_analyzer import audio
-
+from perch_head.audio import open_audio_file, split_signal
 from perch_head.embed import perch_embed
 
 AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg")
@@ -75,7 +73,8 @@ def _list_clips(library: str, folder: str) -> list[str]:
     return [f for f in os.listdir(fdir) if f.lower().endswith(AUDIO_EXT)]
 
 
-def _clip_windows(library: str, folder: str, files: list[str], cap: int, first_only: bool) -> list[np.ndarray]:
+def _clip_windows(library: str, folder: str, files: list[str], cap: int, first_only: bool,
+                   minlen_s: float) -> list[np.ndarray]:
     """Up to `cap` clips -> list of (160000,) windows via Perch's feed path (zero-pad)."""
     fdir = os.path.join(library, folder)
     out: list[np.ndarray] = []
@@ -83,8 +82,8 @@ def _clip_windows(library: str, folder: str, files: list[str], cap: int, first_o
         if len(out) >= cap:
             break
         try:
-            sig, rate = audio.open_audio_file(os.path.join(fdir, f), sample_rate=32000)
-            chunks = audio.split_signal(sig, rate, 5.0, 0, cfg.SIG_MINLEN)
+            sig, rate = open_audio_file(os.path.join(fdir, f))
+            chunks = split_signal(sig, rate, minlen_s=minlen_s)
         except Exception:
             continue
         if not chunks:
@@ -120,6 +119,8 @@ def main():
     ap.add_argument("--cap", type=int, default=150, help="max clips per class folder.")
     ap.add_argument("--all-windows", action="store_true",
                     help="use every 5 s window of each clip (default: first window only).")
+    ap.add_argument("--minlen-s", type=float, default=1.0,
+                    help="minimum real (non-padded) seconds required to keep a clip's final window.")
     ap.add_argument("--no-nonevents", action="store_true", help="skip helper/non-event folders.")
     ap.add_argument("--nonevent-prefixes", default="Environment_,Homo sapiens_",
                     help="comma-separated folder-name prefixes treated as non-events (all-zero rows).")
@@ -179,7 +180,8 @@ def main():
     for k, (folder, ci) in enumerate(all_folders):
         files = _list_clips(args.library, folder)
         random.shuffle(files)
-        windows = _clip_windows(args.library, folder, files, args.cap, first_only=not args.all_windows)
+        windows = _clip_windows(args.library, folder, files, args.cap,
+                                first_only=not args.all_windows, minlen_s=args.minlen_s)
         if not windows:
             print(f"  [{k + 1}/{len(all_folders)}] {folder}: no usable clips, skip")
             continue

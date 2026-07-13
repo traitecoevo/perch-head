@@ -25,14 +25,19 @@ docs/                  training.md, inference.md, design_plan.md
 
 ## Environment
 
-Needs `birdnet_analyzer` installed editable from the BirdNET-Analyzer fork
-(`https://github.com/wcornwell/BirdNET-Analyzer`) — it provides the frozen Perch v2
-checkpoint (`cfg.PERCH_V2_MODEL_PATH`) and the audio I/O (`audio.open_audio_file`,
-`audio.split_signal`) used for windowing. This repo does not vendor a checkpoint or its own
-audio-loading code.
+No BirdNET-Analyzer dependency — standalone. `perch_head/embed.py` fetches the Perch v2
+checkpoint via `kagglehub` (`KAGGLE_MODEL_HANDLE = "google/bird-vocalization-classifier/
+tensorFlow2/perch_v2_cpu"`, the same handle BirdNET-Analyzer itself uses in
+`birdnet_analyzer/utils.py::ensure_perch_exists()` — verified against that source, not
+guessed), cached locally after the first call. Set `PERCH_MODEL_PATH` to point at an
+existing local checkpoint instead of downloading. `perch_head/audio.py` is a faithful port
+of BirdNET-Analyzer's `audio.open_audio_file`/`split_signal` (librosa, `kaiser_fast`
+resampling, zero-pad/end-align, no peak-normalization) — kept byte-for-byte behavior
+equivalent on purpose, since the already-trained heads were extracted through that exact
+path (see `docs/design_plan.md` §3); don't change the resampler or padding scheme without
+re-validating.
 
 ```bash
-pip install -e /path/to/BirdNET-Analyzer
 pip install -e ".[dev]"   # dev extra pulls in ruff==0.14.0
 ```
 
@@ -66,3 +71,10 @@ tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `doc
 - **This pipeline is server-side/retrospective, never exported to `.tflite`.** Real-time/
   edge detection is a different, larger, deliberately deferred project — don't assume this
   head needs to become edge-deployable when extending it.
+- **No BirdNET-Analyzer dependency, on purpose** — this project originally borrowed
+  BirdNET-Analyzer's local Perch checkpoint path and its `audio.py` for windowing, but that
+  only worked on machines that happened to have that fork installed with a manually-placed
+  checkpoint (BirdNET-Analyzer doesn't commit or auto-fetch it either in a way other users
+  could rely on without also having run that fork's own setup). Fetching directly via
+  `kagglehub` and owning the windowing code makes perch-head installable by any collaborator
+  on its own.

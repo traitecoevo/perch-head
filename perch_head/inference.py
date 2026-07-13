@@ -10,7 +10,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from perch_head.embed import SAMPLE_RATE, WINDOW_SECONDS, perch_embed
+from perch_head.audio import windows_for_file as _windows_for_file
+from perch_head.embed import WINDOW_SECONDS, perch_embed
 
 AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg")
 
@@ -56,10 +57,7 @@ class Head:
 def windows_for_file(path: str, sig_minlen: float = 1.0) -> tuple[list[np.ndarray], list[float]]:
     """A single audio file -> (windows, start_times_s). Zero-pads the final short window,
     end-aligned, no peak-normalization — the same feed path embeddings were trained on."""
-    from birdnet_analyzer import audio
-    sig, rate = audio.open_audio_file(path, sample_rate=SAMPLE_RATE)
-    chunks = audio.split_signal(sig, rate, WINDOW_SECONDS, 0, sig_minlen)
-    starts = [i * WINDOW_SECONDS for i in range(len(chunks))]
+    chunks, starts = _windows_for_file(path, minlen_s=sig_minlen)
     return [np.asarray(c, dtype="float32") for c in chunks], starts
 
 

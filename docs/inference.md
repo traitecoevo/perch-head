@@ -5,13 +5,8 @@ writes a CSV of `(file, window, species, score)` rows.
 
 ## Prerequisites
 
-Same as training — `birdnet_analyzer` installed editable from the BirdNET-Analyzer fork
-(provides the Perch checkpoint + audio I/O) and this package installed:
-
-```bash
-pip install -e /path/to/BirdNET-Analyzer
-pip install -e .
-```
+Same as training — this package installed (`pip install -e .`); see `docs/training.md`
+for the `kagglehub` checkpoint fetch / `PERCH_MODEL_PATH` override.
 
 At inference time nothing here needs Keras/TensorFlow *training* machinery — the head is a
 pure-numpy forward pass (`perch_head/inference.py::Head.predict_embeddings`); the only

@@ -7,13 +7,13 @@ See `docs/design_plan.md` for the experiments that produced the recommended defa
 
 ## Prerequisites
 
-- A Python environment with this package installed (`pip install -e .`) plus
-  `birdnet_analyzer` installed editable from the BirdNET-Analyzer fork (provides the frozen
-  Perch v2 checkpoint and the audio I/O used for windowing):
+- A Python environment with this package installed:
   ```bash
-  pip install -e /path/to/BirdNET-Analyzer
   pip install -e .
   ```
+  The first run downloads the Perch v2 checkpoint via `kagglehub` (~1–2 GB, cached
+  locally after that). If you already have a local copy, set `PERCH_MODEL_PATH` to skip
+  the download.
 - A clip library: one folder per class, folder name `Genus species_Common Name`
   (e.g. `Pachycephala pectoralis_Golden Whistler`). Non-event/helper folders (background
   noise, wind, human activity, ...) are supported — see `--nonevent-prefixes` below.

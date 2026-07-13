@@ -5,9 +5,17 @@ Perch's saved_model serving signature exposes both a native `label` (14795-class
 the penultimate `embedding` (1536-d) representation. This module pulls the latter, so a
 custom head can be trained on it and scored against it later. Input geometry is fixed:
 5 s @ 32 kHz = 160000 samples per window (see `WINDOW_SECONDS` / `SAMPLE_RATE`).
+
+The checkpoint is fetched via `kagglehub` — no BirdNET-Analyzer dependency. Kaggle Models
+handle taken from `google/bird-vocalization-classifier` (Perch v2, CPU-serving variant),
+the same handle BirdNET-Analyzer itself downloads at `birdnet_analyzer/utils.py::
+ensure_perch_exists()`. `kagglehub.model_download` caches locally after the first call, so
+repeated runs don't re-download.
 """
 
 from __future__ import annotations
+
+import os
 
 import numpy as np
 import tensorflow as tf
@@ -17,18 +25,42 @@ WINDOW_SECONDS = 5.0
 WINDOW_SAMPLES = int(SAMPLE_RATE * WINDOW_SECONDS)
 EMBEDDING_DIM = 1536
 
+KAGGLE_MODEL_HANDLE = "google/bird-vocalization-classifier/tensorFlow2/perch_v2_cpu"
+_REQUIRED_FILES = (
+    "fingerprint.pb",
+    "saved_model.pb",
+    "variables/variables.index",
+    "variables/variables.data-00000-of-00001",
+    "assets/labels.csv",
+    "assets/perch_v2_ebird_classes.csv",
+)
+
 _PERCH_EMBED_MODEL = None
 _PERCH_MODEL_PATH = None
 
 
-def default_checkpoint_path() -> str:
-    """Perch v2 checkpoint bundled with the BirdNET-Analyzer fork.
+def _valid_checkpoint(path: str) -> bool:
+    return all(os.path.exists(os.path.join(path, f)) for f in _REQUIRED_FILES)
 
-    Requires `birdnet_analyzer` to be installed (editable) from
-    https://github.com/wcornwell/BirdNET-Analyzer — see the top-level README.
+
+def default_checkpoint_path() -> str:
+    """Perch v2 checkpoint path.
+
+    Honors the `PERCH_MODEL_PATH` env var if set (e.g. an already-downloaded local copy —
+    useful to skip a redundant download if another tool on the same machine already fetched
+    one). Otherwise fetches via `kagglehub.model_download(KAGGLE_MODEL_HANDLE)`, which
+    caches locally after the first call.
     """
-    import birdnet_analyzer.config as cfg
-    return cfg.PERCH_V2_MODEL_PATH
+    env_path = os.environ.get("PERCH_MODEL_PATH")
+    if env_path:
+        if not _valid_checkpoint(env_path):
+            raise FileNotFoundError(
+                f"PERCH_MODEL_PATH={env_path!r} is missing required Perch checkpoint files "
+                f"(expected e.g. {_REQUIRED_FILES[0]}, {_REQUIRED_FILES[-1]})."
+            )
+        return env_path
+    import kagglehub
+    return kagglehub.model_download(KAGGLE_MODEL_HANDLE)
 
 
 def load(path: str | None = None) -> None:
