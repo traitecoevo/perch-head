@@ -28,7 +28,7 @@ class Head:
 
     @classmethod
     def load(cls, path: str) -> "Head":
-        d = np.load(path, allow_pickle=True)
+        d = np.load(path)
         return cls(
             W1=d["W1"], b1=d["b1"], W2=d["W2"], b2=d["b2"],
             labels=[str(x) for x in d["labels"]],

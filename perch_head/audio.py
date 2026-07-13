@@ -1,13 +1,20 @@
 """Audio loading + windowing, self-contained (no BirdNET-Analyzer dependency).
 
-`split_signal` is a direct, faithful port of BirdNET-Analyzer's `audio.split_signal`
-(overlap=0 case only — the only configuration this project ever uses): non-overlapping
-`window_s`-second chunks, zero-padded and end-aligned so every chunk is the same length,
-with the final chunk dropped if less than `minlen_s` of real (non-padded) signal remains.
-`open_audio_file` matches its resampling settings (librosa, `res_type="kaiser_fast"`, mono).
+`split_signal` closely follows BirdNET-Analyzer's `audio.split_signal` (overlap=0 case
+only — the only configuration this project ever uses): non-overlapping `window_s`-second
+chunks, zero-padded at the end (real signal at the front, trailing zeros) so every chunk is
+the same length, with the final chunk dropped if less than `minlen_s` of real (non-padded)
+signal remains. `open_audio_file` matches its resampling settings (librosa,
+`res_type="kaiser_fast"`, mono).
 
-Keeping this port exact matters: the already-trained heads in this project (see
-docs/design_plan.md §3) were extracted through this exact feed path — zero-pad, end-align,
+One deliberate deviation from BirdNET-Analyzer: a clip whose *entire* signal is shorter than
+`minlen_s` yields no windows here (returns `[]`), whereas BirdNET keeps a single padded chunk
+for it. Dropping clips under `minlen_s` (default 1 s of real audio) is intended — too little
+real signal to trust the embedding — so extraction skips them rather than training on a
+mostly-zero window.
+
+Keeping the rest of this feed path behavior-consistent matters: the already-trained heads in
+this project (see docs/design_plan.md §3) were extracted through it — zero-pad the tail,
 no peak-normalization, `kaiser_fast` resampling. A different resampler or padding scheme
 would shift embeddings away from what the heads were trained on.
 """
@@ -28,8 +35,10 @@ def open_audio_file(path: str, sample_rate: int = SAMPLE_RATE) -> tuple[np.ndarr
 
 def split_signal(sig: np.ndarray, rate: int, window_s: float = WINDOW_SECONDS,
                   minlen_s: float = 1.0) -> list[np.ndarray]:
-    """Non-overlapping `window_s`-second chunks, zero-padded/end-aligned. Drops the final
-    chunk if less than `minlen_s` of real signal remains in it."""
+    """Non-overlapping `window_s`-second chunks; the tail chunk is zero-padded at the end
+    (real signal first, trailing zeros). Drops a chunk if less than `minlen_s` of real signal
+    remains in it — including the degenerate case where the whole clip is under `minlen_s`,
+    which yields no windows at all (returns `[]`)."""
     chunksize = int(rate * window_s)
     minsize = int(rate * minlen_s)
     lastchunkpos = int((sig.size - 1) / chunksize) * chunksize if sig.size else 0

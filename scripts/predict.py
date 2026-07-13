@@ -40,7 +40,11 @@ def main():
         writer.writeheader()
         for path in iter_audio_files(args.audio):
             n_files += 1
-            rows = predict_file(head, path, batch=args.batch)
+            try:
+                rows = predict_file(head, path, batch=args.batch)
+            except Exception as e:
+                print(f"  {path}: SKIPPED ({type(e).__name__}: {e})")
+                continue
             for r in rows:
                 if r["score"] < args.threshold:
                     continue
