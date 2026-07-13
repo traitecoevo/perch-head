@@ -18,25 +18,29 @@ Standalone — no BirdNET-Analyzer dependency. The Perch checkpoint is fetched v
 ## Quickstart
 
 ```bash
-pip install -e .
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"   # dev extra pulls in ruff; drop it if you don't need linting
 # First run downloads the Perch v2 checkpoint via kagglehub (cached after that);
 # set PERCH_MODEL_PATH to point at an existing local copy instead if you have one.
 
 # 1. Extract Perch embeddings from your clip library (one-time, cached)
-python scripts/extract_embeddings.py \
+.venv/bin/python scripts/extract_embeddings.py \
   --library /path/to/clip_library \
   --species-list configs/species/smithslake_present.txt \
   --out train_caches/embeddings.npz --n-distractors -1 --all-windows --cap 350
 
 # 2. Train a head on the cache
-python scripts/train_head.py \
+.venv/bin/python scripts/train_head.py \
   --npz train_caches/embeddings.npz --out-dir /path/to/recognizers \
   --name myhead --recipe a --dropout 0.4
 
 # 3. Run inference on new audio
-python scripts/predict.py \
+.venv/bin/python scripts/predict.py \
   --head /path/to/recognizers/myhead.npz --audio /path/to/audio --out predictions.csv
 ```
+
+Tested on Python 3.11 / macOS arm64 — `requires-python = ">=3.10"` in `pyproject.toml` is
+the only hard floor; no OS-specific code.
 
 See `docs/training.md` and `docs/inference.md` for the full flag reference and the
 reasoning behind the recommended defaults.

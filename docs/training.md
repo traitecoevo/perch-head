@@ -7,13 +7,14 @@ See `docs/design_plan.md` for the experiments that produced the recommended defa
 
 ## Prerequisites
 
-- A Python environment with this package installed:
+- A Python environment (3.10+) with this package installed:
   ```bash
-  pip install -e .
+  python3 -m venv .venv
+  .venv/bin/pip install -e .
   ```
   The first run downloads the Perch v2 checkpoint via `kagglehub` (~1–2 GB, cached
   locally after that). If you already have a local copy, set `PERCH_MODEL_PATH` to skip
-  the download.
+  the download. All commands below assume `.venv/bin/python`.
 - A clip library: one folder per class, folder name `Genus species_Common Name`
   (e.g. `Pachycephala pectoralis_Golden Whistler`). Non-event/helper folders (background
   noise, wind, human activity, ...) are supported — see `--nonevent-prefixes` below.
@@ -24,7 +25,7 @@ See `docs/design_plan.md` for the experiments that produced the recommended defa
 ## Step 1 — extract embeddings
 
 ```bash
-python scripts/extract_embeddings.py \
+.venv/bin/python scripts/extract_embeddings.py \
   --library /path/to/your/clip_library \
   --species-list configs/species/smithslake_present.txt \
   --out train_caches/perch_embeddings.npz \
@@ -55,7 +56,7 @@ Recommended production configuration (recipe A + the dropout found best in the
 `docs/design_plan.md` §6 sweep):
 
 ```bash
-python scripts/train_head.py \
+.venv/bin/python scripts/train_head.py \
   --npz train_caches/perch_embeddings.npz \
   --out-dir /path/to/recognizers \
   --name myhead \

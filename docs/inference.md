@@ -15,7 +15,7 @@ model actually run is the frozen Perch checkpoint that produces the 1536-d embed
 ## Usage
 
 ```bash
-python scripts/predict.py \
+.venv/bin/python scripts/predict.py \
   --head /path/to/recognizers/myhead.npz \
   --audio /path/to/audio_or_folder \
   --out predictions.csv \

@@ -37,11 +37,22 @@ equivalent on purpose, since the already-trained heads were extracted through th
 path (see `docs/design_plan.md` §3); don't change the resampler or padding scheme without
 re-validating.
 
+Own dedicated venv (unlike `soundscape-eval`, which piggybacks on BirdNET-Analyzer's — not
+applicable here since this repo has no BirdNET-Analyzer dependency to share):
+
 ```bash
-pip install -e ".[dev]"   # dev extra pulls in ruff==0.14.0
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"   # dev extra pulls in ruff==0.14.0
 ```
 
-Linting: `ruff check .` before committing (matches the pin used by the sibling repos).
+Verified 2026-07-14: clean `pip install -e ".[dev]"` from PyPI only (no manual/local wheel
+steps) on Python 3.11 / macOS arm64 resolves tensorflow 2.21 + keras 3 + librosa/soundfile/
+resampy/kagglehub, and the full extract → train → predict pipeline runs end-to-end through
+it. Tiny (~3e-6) embedding drift vs. the TF 2.20 venv used during development is expected
+TF-version float noise, not a bug — negligible next to head training's own regularization.
+
+Linting: `.venv/bin/ruff check .` before committing (matches the pin used by the sibling
+repos).
 
 ## Workflow
 
