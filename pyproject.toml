@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perch-head"
+version = "0.1.0"
+description = "Train and run custom classifier heads on Google Perch embeddings for bioacoustic species recognition"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "keras",
+    "tensorflow",
+    "scikit-learn",
+    # Perch checkpoint + audio I/O (open_audio_file/split_signal). Install from the
+    # BirdNET-Analyzer fork, editable, e.g.:
+    #   pip install -e /path/to/BirdNET-Analyzer
+    # Listed here for documentation; not installable from PyPI.
+    # "birdnet_analyzer",
+]
+
+[project.optional-dependencies]
+dev = ["ruff==0.14.0"]
+
+[tool.setuptools.packages.find]
+include = ["perch_head*"]

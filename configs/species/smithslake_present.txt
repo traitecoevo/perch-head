@@ -1,0 +1,31 @@
+# Present-species list for Smiths Lake (26 species confirmed in the labeled evaluation
+# soundscape used in soundscape-eval; see docs/design_plan.md). Scientific binomials,
+# one per line, matched case-insensitively against each library folder's "Genus species"
+# prefix. Generated 2026-07-14 from the is_present column of a previously extracted
+# perch_fullvocab.npz (traceable to soundscape_eval.groundtruth's GT parse).
+Acanthiza nana
+Acanthiza pusilla
+Acanthorhynchus tenuirostris
+Caligavis chrysops
+Coracina novaehollandiae
+Cormobates leucophaea
+Dicaeum hirundinaceum
+Eopsaltria australis
+Falcunculus frontatus
+Gerygone mouki
+Macropygia phasianella
+Malurus lamberti
+Meliphaga lewinii
+Monarcha melanopsis
+Myzomela sanguinolenta
+Neochmia temporalis
+Pachycephala pectoralis
+Pardalotus punctatus
+Philemon corniculatus
+Rhipidura albiscapa
+Rhipidura leucophrys
+Rhipidura rufifrons
+Sericornis frontalis
+Sphecotheres vieilloti
+Strepera graculina
+Zosterops lateralis
