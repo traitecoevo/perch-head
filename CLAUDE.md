@@ -21,6 +21,7 @@ perch_head/           embed.py (Perch embedding helper), inference.py (Head clas
 scripts/               extract_embeddings.py, train_head.py, predict.py — the three CLIs
 configs/species/       example species-list inputs for extraction
 docs/                  training.md, inference.md, design_plan.md
+tests/                 offline unit tests (windowing invariants + numpy forward pass)
 ```
 
 ## Environment
@@ -30,12 +31,14 @@ checkpoint via `kagglehub` (`KAGGLE_MODEL_HANDLE = "google/bird-vocalization-cla
 tensorFlow2/perch_v2_cpu"`, the same handle BirdNET-Analyzer itself uses in
 `birdnet_analyzer/utils.py::ensure_perch_exists()` — verified against that source, not
 guessed), cached locally after the first call. Set `PERCH_MODEL_PATH` to point at an
-existing local checkpoint instead of downloading. `perch_head/audio.py` is a faithful port
-of BirdNET-Analyzer's `audio.open_audio_file`/`split_signal` (librosa, `kaiser_fast`
-resampling, zero-pad/end-align, no peak-normalization) — kept byte-for-byte behavior
-equivalent on purpose, since the already-trained heads were extracted through that exact
-path (see `docs/design_plan.md` §3); don't change the resampler or padding scheme without
-re-validating.
+existing local checkpoint instead of downloading. `perch_head/audio.py` closely follows
+BirdNET-Analyzer's `audio.open_audio_file`/`split_signal` (librosa, `kaiser_fast`
+resampling, trailing zero-pad, no peak-normalization) — kept behavior-consistent on purpose,
+since the already-trained heads were extracted through that path (see `docs/design_plan.md`
+§3); don't change the resampler or padding scheme without re-validating. One deliberate
+deviation: a clip whose entire signal is under `minlen_s` (default 1 s) yields no windows
+here, where BirdNET would keep a single padded chunk — dropping too-short clips is intended,
+not a bug.
 
 Own dedicated venv (unlike `soundscape-eval`, which piggybacks on BirdNET-Analyzer's — not
 applicable here since this repo has no BirdNET-Analyzer dependency to share):
@@ -52,7 +55,9 @@ it. Tiny (~3e-6) embedding drift vs. the TF 2.20 venv used during development is
 TF-version float noise, not a bug — negligible next to head training's own regularization.
 
 Linting: `.venv/bin/ruff check .` before committing (matches the pin used by the sibling
-repos).
+repos). Tests: `.venv/bin/python -m pytest tests/` — all offline (no Perch checkpoint or
+network needed), covering `split_signal`'s windowing invariants and the pure-numpy head
+forward pass.
 
 ## Workflow
 
@@ -76,9 +81,10 @@ tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `doc
 - **Recipe A (focal loss + upsampling) over recipe B (plain BCE) once past a few hundred
   classes** — B collapses at scale (`docs/design_plan.md` §6), a real degenerate failure
   mode, not noise.
-- **`dropout=0.4` over the original `0.25`** for production — won recall at a fixed
-  false-positive budget on two independent validation soundscapes; `l2norm` trades this same
-  metric away for better AUPRC/ranking, which is why it's *not* the recommended default.
+- **`dropout=0.4` over the original `0.25`** for production, and now the `train_head.py`
+  default — won recall at a fixed false-positive budget on two independent validation
+  soundscapes; `l2norm` trades this same metric away for better AUPRC/ranking, which is why
+  it's *not* the recommended default.
 - **This pipeline is server-side/retrospective, never exported to `.tflite`.** Real-time/
   edge detection is a different, larger, deliberately deferred project — don't assume this
   head needs to become edge-deployable when extending it.

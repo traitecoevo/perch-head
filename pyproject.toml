@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff==0.14.0"]
+dev = ["ruff==0.14.0", "pytest"]
 
 [tool.setuptools.packages.find]
 include = ["perch_head*"]

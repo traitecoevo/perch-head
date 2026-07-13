@@ -74,7 +74,7 @@ Key flags:
 | Flag | Effect |
 |---|---|
 | `--recipe` | `a` (focal loss + upsampling, recommended) or `b` (plain BCE, no upsampling). `docs/design_plan.md` §6: recipe B collapses once the vocabulary grows past a few hundred classes — use `a` unless you have a specific reason to compare. |
-| `--dropout` | 0.25 is the original matched-to-BirdNET-recipe default; 0.4 won recall-at-fixed-FP-budget on both validation soundscapes in the sweep — recommended for production. |
+| `--dropout` | defaults to `0.4`, which won recall-at-fixed-FP-budget on both validation soundscapes in the `docs/design_plan.md` §6 sweep. The original BirdNET-matched value was `0.25`; pass `--dropout 0.25` to reproduce it. |
 | `--l2norm` | L2-normalizes embeddings before training (and must then be applied at inference — the npz records the flag so `perch_head/inference.py` does this automatically). Improved ranking/AUPRC but *cost* recall-at-fixed-FP-budget in the sweep — prefer `dropout=0.4` unless ranking quality specifically is your objective. |
 | `--gamma`, `--alpha`, `--upsample-ratio` | focal-loss and upsampling knobs (recipe `a` only) |
 | `--hidden` | hidden layer width (default 2048; a smaller hidden layer trailed the baseline on every metric in the sweep) |

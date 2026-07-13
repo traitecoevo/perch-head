@@ -53,6 +53,7 @@ perch_head/           importable library: embed.py (Perch checkpoint + embedding
 scripts/               CLIs: extract_embeddings.py, train_head.py, predict.py
 configs/species/       example species lists (extraction input)
 docs/                  training.md, inference.md, design_plan.md (design + experiment record)
+tests/                 offline unit tests — `.venv/bin/python -m pytest tests/`
 ```
 
 ## Relationship to sibling repos

@@ -168,7 +168,9 @@ def main():
     ap.add_argument("--recipe", choices=("a", "b", "both"), default="a")
     ap.add_argument("--l2norm", action="store_true")
     ap.add_argument("--hidden", type=int, default=2048)
-    ap.add_argument("--dropout", type=float, default=0.25)
+    ap.add_argument("--dropout", type=float, default=0.4,
+                    help="dropout rate (default 0.4 — the production recommendation; see "
+                         "docs/design_plan.md §6. The original BirdNET-matched default was 0.25).")
     ap.add_argument("--epochs", type=int, default=50)
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--lr", type=float, default=1e-4)
@@ -178,7 +180,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    data = dict(np.load(args.npz, allow_pickle=True))
+    data = dict(np.load(args.npz))
     print(f"Loaded {args.npz}: X {data['X'].shape}  Y {data['Y'].shape}  "
           f"present {int(data['is_present'].sum())}  l2norm={args.l2norm}")
 

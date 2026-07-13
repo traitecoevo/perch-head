@@ -44,10 +44,14 @@ ceiling, not the head architecture.
 Perch requires exactly 5 s @ 32 kHz (160000 samples). Most training-library clips are ~3 s
 (cut for a 3 s BirdNET window), so most clips need ~2 s of padding to fit Perch's window.
 
-**Resolution: zero-pad, end-aligned, no normalization** — `audio.split_signal(sig, 32000,
-5.0, 0, SIG_MINLEN)` with `SIG_MINLEN=1.0`, i.e. a 3 s clip becomes 3 s audio + 2 s zeros.
-This is the same path real soundscape windows are scored through, so training and scoring
-embeddings are directly comparable.
+**Resolution: trailing zero-pad, no normalization** — `audio.split_signal(sig, 32000,
+5.0, 0, SIG_MINLEN)` with `SIG_MINLEN=1.0`, i.e. a 3 s clip becomes 3 s audio + 2 s zeros
+(real signal at the front, zeros appended). This is the same path real soundscape windows
+are scored through, so training and scoring embeddings are directly comparable. Clips with
+less than `SIG_MINLEN` of real signal in total are dropped entirely (no window emitted) —
+intended: too little real audio to trust the embedding. This is the one place the port
+diverges from BirdNET-Analyzer's `split_signal`, which would instead keep a single padded
+chunk.
 
 **Verified empirically (padding probe, 2026-07-08).** Zero-padding a 3 s training clip to
 5 s does not shift its Perch embedding away from real 5 s field windows of the same
