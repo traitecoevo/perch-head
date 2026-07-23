@@ -1,5 +1,19 @@
 # perch-head — Project Notes for Claude
 
+## Where this repo sits — read before building anything new
+
+**One library, two backbones.** `reallybig` is backbone-agnostic labeled audio living
+outside every repo (OneDrive `call_library/`). Only the *embedding caches* and *venvs*
+fork per backbone — the library itself never does. This repo's cache is
+`train_caches/perch_reallybig_*.npz`; it is **not** a separate training library.
+
+**This repo owns:** Perch-backbone head training + inference.
+**It does NOT own:** model-comparison evaluation (→ `soundscape-eval`), curation of
+`reallybig` (→ `Training_library_assembly_pipeline`).
+
+Full ownership table, seams, venvs, shared data: **`~/Documents/ECOACOUSTICS.md`**. Check it
+before writing a downloader, clip-mover, plot, or metric — it exists to stop double-builds.
+
 ## What this repo is
 
 Training + inference pipeline for custom classifier heads on Google Perch embeddings.
