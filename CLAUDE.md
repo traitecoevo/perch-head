@@ -11,7 +11,7 @@ fork per backbone — the library itself never does. This repo's cache is
 **It does NOT own:** model-comparison evaluation (→ `soundscape-eval`), curation of
 `reallybig` (→ `Training_library_assembly_pipeline`).
 
-Full ownership table, seams, venvs, shared data: **`~/Documents/ECOACOUSTICS.md`**. Check it
+Full ownership table, seams, venvs, shared data: **`~/Documents/ecoacoustics/ECOACOUSTICS.md`**. Check it
 before writing a downloader, clip-mover, plot, or metric — it exists to stop double-builds.
 
 ## What this repo is
