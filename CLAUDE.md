@@ -90,6 +90,20 @@ read either backbone's artifact unchanged — but the spaces are **1536-d Perch 
 BirdNET head** and nothing may be compared across them. `runs/run_dual.sh` calls it as the
 Perch half of its final embedding stage; see `runs/CLAUDE.md` § 5.
 
+**Two extensions designed but not built (2026-07-29)**, both cheap because the backbone is
+frozen and already-extracted vectors never go stale — full reasoning in `runs/CLAUDE.md`
+§ "Open threads":
+
+1. *Incremental extraction.* Adding one class re-embeds the whole library (~3 h) to
+   recompute vectors that come back identical. Appending only the changed folders is sound,
+   but the cache has no per-row provenance — a non-event row is all-zero, so its source
+   folder is unrecoverable from `Y`. Add a `source` array to the cache first.
+2. *`derive_head_embeddings.py`.* The trained head's 2048-d hidden layer is computed inside
+   `Head.predict_embeddings()` and discarded. `relu(X @ W1 + b1)` over an existing library
+   artifact plus the head npz reproduces it in seconds, no audio decoded (honour `l2norm`).
+   Recognizer-specific and stale on every retrain, so it complements the backbone artifact
+   rather than replacing it.
+
 Full flag reference and the reasoning behind current defaults (recipe A, dropout 0.4, full
 vocabulary): `docs/training.md` and `docs/inference.md`. Why those defaults, and what was
 tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `docs/design_plan.md`.
