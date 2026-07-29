@@ -97,9 +97,12 @@ tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `doc
 ## Design decisions worth knowing before changing extraction/training defaults
 
 > **Dual-arm run contract:** `runs/CLAUDE.md` (the `run_dual.sh` orchestrator) sets the
-> defaults for a paired BirdNET+Perch run — the Perch arm's `--species-list` must name
-> **all** `reallybig` classes (regenerated `configs/species/reallybig_all.txt`), with
-> `Environment_*`/`Homo sapiens_*`/`Noise` as non-events (the all-zero-row behavior below).
+> defaults for a paired BirdNET+Perch run — the Perch arm's `--species-list` names **all**
+> `reallybig` classes, which the runner now derives from the library at launch rather than
+> reading a checked-in file (a stale list silently shrinks `is_present`, and with it the
+> headline AUPRC, without changing the model). `configs/species/` still holds the scoped
+> lists, which is what `--species-list` is for. `Environment_*`/`Homo sapiens_*`/`Noise`
+> stay non-events (the all-zero-row behavior below).
 > See `~/Documents/ecoacoustics/runs/CLAUDE.md` § "Run defaults"; keep the two in sync.
 
 - **Zero-pad short clips to Perch's 5 s window, end-aligned, not normalized** — verified
