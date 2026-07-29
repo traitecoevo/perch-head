@@ -33,6 +33,7 @@ of this repo's embedding/scoring logic rather than a shared dependency.
 ```
 perch_head/           embed.py (Perch embedding helper), inference.py (Head class + scoring)
 scripts/               extract_embeddings.py, train_head.py, predict.py — the three CLIs
+                       extract_library_embeddings.py — the curation artifact, not a cache
 configs/species/       example species-list inputs for extraction
 docs/                  training.md, inference.md, design_plan.md
 tests/                 offline unit tests (windowing invariants + numpy forward pass)
@@ -79,11 +80,27 @@ forward pass.
 2. `scripts/train_head.py` — cheap, repeatable on the cache.
 3. `scripts/predict.py` — score new audio with a trained head.
 
+Off to one side, not part of training: **`scripts/extract_library_embeddings.py`** walks the
+same library but writes the *clip-level* artifact — one row per clip, keyed by filename,
+every class, no labels. That is what `Training_library_assembly_pipeline/curation/` and
+`birdnetEmbed` consume, because they move and plot individual clips; the training cache
+above can't serve them (its rows are windows and it keeps no filenames). Its npz layout is
+deliberately identical to BirdNET-Analyzer's `extract_head_embeddings.py`, so those tools
+read either backbone's artifact unchanged — but the spaces are **1536-d Perch vs 2048-d
+BirdNET head** and nothing may be compared across them. `runs/run_dual.sh` calls it as the
+Perch half of its final embedding stage; see `runs/CLAUDE.md` § 4.
+
 Full flag reference and the reasoning behind current defaults (recipe A, dropout 0.4, full
 vocabulary): `docs/training.md` and `docs/inference.md`. Why those defaults, and what was
 tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `docs/design_plan.md`.
 
 ## Design decisions worth knowing before changing extraction/training defaults
+
+> **Dual-arm run contract:** `runs/CLAUDE.md` (the `run_dual.sh` orchestrator) sets the
+> defaults for a paired BirdNET+Perch run — the Perch arm's `--species-list` must name
+> **all** `reallybig` classes (regenerated `configs/species/reallybig_all.txt`), with
+> `Environment_*`/`Homo sapiens_*`/`Noise` as non-events (the all-zero-row behavior below).
+> See `~/Documents/ecoacoustics/runs/CLAUDE.md` § "Run defaults"; keep the two in sync.
 
 - **Zero-pad short clips to Perch's 5 s window, end-aligned, not normalized** — verified
   empirically not to shift embeddings away from real field windows of the same species
