@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import os
 import random
+import sys
 
 import numpy as np
 
@@ -75,7 +76,11 @@ def _list_clips(library: str, folder: str) -> list[str]:
 
 def _clip_windows(library: str, folder: str, files: list[str], cap: int, first_only: bool,
                    minlen_s: float) -> list[np.ndarray]:
-    """Up to `cap` clips -> list of (160000,) windows via Perch's feed path (zero-pad)."""
+    """Up to `cap` WINDOWS -> list of (160000,) windows via Perch's feed path (zero-pad).
+
+    Note the unit: with --all-windows a long clip contributes several windows, so a class
+    can reach `cap` well before `cap` clips have been read. `cap <= 0` means no limit.
+    """
     fdir = os.path.join(library, folder)
     out: list[np.ndarray] = []
     for f in files:
@@ -116,7 +121,9 @@ def main():
                     help="non-present classes to include beyond the present set; -1 = all.")
     ap.add_argument("--distractor-select", choices=("common", "random"), default="common",
                     help="'common' = largest folders first; 'random' = seeded random sample.")
-    ap.add_argument("--cap", type=int, default=150, help="max clips per class folder.")
+    ap.add_argument("--cap", type=int, default=150,
+                    help="max windows per class folder (not clips -- see _clip_windows); "
+                         "0 or less = no cap, i.e. use the whole folder.")
     ap.add_argument("--all-windows", action="store_true",
                     help="use every 5 s window of each clip (default: first window only).")
     ap.add_argument("--minlen-s", type=float, default=1.0,
@@ -172,7 +179,9 @@ def main():
     print(f"Species classes (output neurons): {n_classes} "
           f"({len(present_lbls)} present + {n_classes - len(present_lbls)} distractors)")
     print(f"Non-event helper folders (all-zero rows): {len(nonevent_lbls)}")
-    print(f"Per-class cap: {args.cap}; windows/clip: {'all' if args.all_windows else 'first'}")
+    cap = args.cap if args.cap > 0 else sys.maxsize
+    print(f"Per-class cap: {args.cap if args.cap > 0 else 'none'} (windows); "
+          f"windows/clip: {'all' if args.all_windows else 'first'}")
 
     X_parts, Y_parts = [], []
     total = 0
@@ -180,7 +189,7 @@ def main():
     for k, (folder, ci) in enumerate(all_folders):
         files = _list_clips(args.library, folder)
         random.shuffle(files)
-        windows = _clip_windows(args.library, folder, files, args.cap,
+        windows = _clip_windows(args.library, folder, files, cap,
                                 first_only=not args.all_windows, minlen_s=args.minlen_s)
         if not windows:
             print(f"  [{k + 1}/{len(all_folders)}] {folder}: no usable clips, skip")

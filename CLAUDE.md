@@ -88,7 +88,7 @@ above can't serve them (its rows are windows and it keeps no filenames). Its npz
 deliberately identical to BirdNET-Analyzer's `extract_head_embeddings.py`, so those tools
 read either backbone's artifact unchanged — but the spaces are **1536-d Perch vs 2048-d
 BirdNET head** and nothing may be compared across them. `runs/run_dual.sh` calls it as the
-Perch half of its final embedding stage; see `runs/CLAUDE.md` § 4.
+Perch half of its final embedding stage; see `runs/CLAUDE.md` § 5.
 
 Full flag reference and the reasoning behind current defaults (recipe A, dropout 0.4, full
 vocabulary): `docs/training.md` and `docs/inference.md`. Why those defaults, and what was
@@ -102,7 +102,8 @@ tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `doc
 > reading a checked-in file (a stale list silently shrinks `is_present`, and with it the
 > headline AUPRC, without changing the model). `configs/species/` still holds the scoped
 > lists, which is what `--species-list` is for. `Environment_*`/`Homo sapiens_*`/`Noise`
-> stay non-events (the all-zero-row behavior below).
+> stay non-events (the all-zero-row behavior below). The run also passes `--cap 0` (no
+> per-class cap), so the head sees the whole library like the BirdNET arm does.
 > See `~/Documents/ecoacoustics/runs/CLAUDE.md` § "Run defaults"; keep the two in sync.
 
 - **Zero-pad short clips to Perch's 5 s window, end-aligned, not normalized** — verified

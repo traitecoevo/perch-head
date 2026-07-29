@@ -42,7 +42,7 @@ Key flags:
 | `--label-vocab` | optional: fix the full class vocabulary + column order (e.g. to match another recognizer's exact class set for a side-by-side comparison). Default: derived from `--library`'s own subfolders. |
 | `--n-distractors` | how many non-present classes to include as negatives/distractors; `-1` = every class in the vocabulary. §6 of `docs/design_plan.md`: full vocabulary meaningfully improved recall-at-fixed-FP-budget over a small subset, at the cost of a much longer one-time extraction. |
 | `--distractor-select` | `common` (largest folders first, well-populated) or `random` |
-| `--cap` | max clips per class folder |
+| `--cap` | max **windows** per class folder — not clips: with `--all-windows` a long clip contributes several, so a class can hit the cap well before that many clips have been read. `0` = no cap. The dual-arm run passes `0`, so the Perch head sees the whole folder like the BirdNET arm does. |
 | `--all-windows` | use every 5 s window of each clip, not just the first. Combine with `--cap` to bound extraction time. |
 | `--nonevent-prefixes` / `--nonevent-exact` | folder-name patterns treated as non-events: all-zero label rows, no output neuron, pure hard negatives. Default matches the reference library's convention (`Environment_`, `Homo sapiens_`, `Noise`) — override for a different library's naming. |
 
