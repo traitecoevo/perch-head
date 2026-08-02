@@ -41,7 +41,20 @@ OFFSETS = re.compile(r"_\d+(?:\.\d+)?s_\d+(?:\.\d+)?s.*$")
 
 
 def parent_recording(filename: str) -> str:
-    return OFFSETS.sub("", PREFIX.sub("", filename))
+    """The recording a clip was cut from, for both clip-naming schemes in use.
+
+    The cutters (`cut_stratified.py` / `cut_topup.py`) write
+    '<batch>_<idx>__<recording>__t<offset>__<scorer>', where the recording is
+    already delimited; older mined clips are '<score>_<rank>_<recording>_<a>s_<b>s'.
+    Stripping only the old decoration leaves a new-scheme name untouched, which
+    makes every clip its own singleton group -- and the by-recording report,
+    which exists because contamination arrives one whole recording at a time,
+    silently stops telling you anything.
+    """
+    stem = os.path.splitext(filename)[0]
+    if "__" in stem:
+        return stem.split("__")[1]
+    return OFFSETS.sub("", PREFIX.sub("", stem))
 
 
 def centre_window(sig: np.ndarray, n: int) -> np.ndarray:
@@ -61,9 +74,14 @@ def centre_window(sig: np.ndarray, n: int) -> np.ndarray:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--class-dir", required=True, help="folder of clips for ONE class.")
-    ap.add_argument("--code", required=True,
+    ap.add_argument("--code", default=None,
                     help="eBird-2021 code for the target, e.g. ausgre1 (see the "
                          "checkpoint's assets/perch_v2_ebird_classes.csv).")
+    ap.add_argument("--label", default=None,
+                    help="scientific name from assets/labels.csv, e.g. 'Capra hircus'. "
+                         "Use this for the ~5100 classes that carry no eBird code -- the "
+                         "mammals, frogs and insects Perch also scores. A non-bird class "
+                         "cannot be named with --code.")
     ap.add_argument("--out", required=True, help="output per-clip audit CSV.")
     ap.add_argument("--checkpoint", default=None, help="Perch checkpoint (default: kagglehub cache).")
     ap.add_argument("--suspect-rank", type=int, default=20,
@@ -75,13 +93,28 @@ def main():
     from perch_head.audio import open_audio_file
     from perch_head.embed import WINDOW_SAMPLES, default_checkpoint_path
 
+    if bool(args.code) == bool(args.label):
+        raise SystemExit("give exactly one of --code (eBird) or --label (scientific name)")
+
     ckpt = args.checkpoint or default_checkpoint_path()
     classes_csv = os.path.join(ckpt, "assets", "perch_v2_ebird_classes.csv")
+    labels_csv = os.path.join(ckpt, "assets", "labels.csv")
     with open(classes_csv) as fh:
         codes = [line.strip() for line in fh][1:]   # first line is the 'ebird2021' header
-    if args.code not in codes:
-        raise SystemExit(f"{args.code!r} is not in the Perch eBird-2021 class list ({classes_csv})")
-    target = codes.index(args.code)
+    # Parallel to `codes`, but naming every class rather than only the birds: the
+    # eBird column is 'no_ebird_code' for ~5100 of them.
+    with open(labels_csv) as fh:
+        names = [line.strip() for line in fh][1:]
+
+    if args.code:
+        if args.code not in codes:
+            raise SystemExit(f"{args.code!r} is not in the Perch eBird-2021 class list ({classes_csv})")
+        target = codes.index(args.code)
+    else:
+        if args.label not in names:
+            raise SystemExit(f"{args.label!r} is not in the Perch class list ({labels_csv})")
+        target = names.index(args.label)
+    print(f"target: {names[target]} ({codes[target]})  index {target}")
 
     serving = tf.saved_model.load(ckpt).signatures["serving_default"]
 
@@ -107,8 +140,10 @@ def main():
             "target_logit": round(float(logits[target]), 3),
             "target_rank": int(np.where(order == target)[0][0]) + 1,
             "top1": codes[order[0]],
+            "top1_name": names[order[0]],
             "top1_logit": round(float(logits[order[0]]), 3),
             "top2": codes[order[1]],
+            "top2_name": names[order[1]],
             "margin": round(float(logits[target] - logits[order[0]]), 3),
         })
         if i % 25 == 0:
@@ -120,7 +155,7 @@ def main():
         writer.writerows(rows)
 
     ranks = np.array([r["target_rank"] for r in rows])
-    print(f"\n{os.path.basename(args.class_dir.rstrip('/'))}  ({args.code})  n={len(rows)}")
+    print(f"\n{os.path.basename(args.class_dir.rstrip('/'))}  ({names[target]})  n={len(rows)}")
     print(f"  target is Perch top-1: {(ranks == 1).sum()}   top-5: {(ranks <= 5).sum()}   "
           f"rank>{args.suspect_rank}: {(ranks > args.suspect_rank).sum()}")
 
@@ -132,7 +167,7 @@ def main():
     for rec, rs in sorted(by_recording.items(),
                           key=lambda kv: -np.median([x["target_rank"] for x in kv[1]])):
         med = np.median([x["target_rank"] for x in rs])
-        outranked = Counter(x["top1"] for x in rs if x["target_rank"] > 1)
+        outranked = Counter(x["top1_name"] for x in rs if x["target_rank"] > 1)
         flag = "  <-- SUSPECT" if med > args.suspect_rank else ""
         print(f"    {rec[:46]:48s} n={len(rs):3d} median_rank={med:6.0f} "
               f"median_logit={np.median([x['target_logit'] for x in rs]):6.2f} "
