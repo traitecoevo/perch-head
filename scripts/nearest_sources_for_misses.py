@@ -19,6 +19,15 @@ holding few clips is under-mined -- that is the buy signal. A source already con
 not more windows from that one. `n_clips` is printed next to the vote count so the two
 are never confused.
 
+CAVEAT, and it has already burned one recommendation: `votes_per_clip` is confounded by
+SOURCE DURATION, which this script cannot see -- it only ever sees clips. A 5 s recording
+yields exactly one window, so it scores a huge votes/clip and looks maximally under-mined
+when it is in fact fully consumed. That is what happened to the top Pied Butcherbird row
+(iNat 2054328, 1 clip, nearest to 12 of 22 misses): the recording is 5.07 s long and there
+was nothing left to cut. Before acting on a high votes/clip row, check the source's length.
+The right conclusion in that case is not "mine this harder" but "find more recordings LIKE
+this one" -- which for that row meant an iNat radius search around the soundscape site.
+
 Also prints the distance scale. If the nearest library clip to a typical miss is farther
 than library clips are from each other, no amount of mining from existing sources closes
 the gap and the class needs genuinely new audio.
