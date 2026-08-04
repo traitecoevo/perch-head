@@ -137,6 +137,17 @@ tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `doc
 - **This pipeline is server-side/retrospective, never exported to `.tflite`.** Real-time/
   edge detection is a different, larger, deliberately deferred project — don't assume this
   head needs to become edge-deployable when extending it.
+- **`AUDIO_EXT` is defined once, in `perch_head/audio.py`, and every walker imports it.**
+  It used to be copied into five files, all reading `(".wav", ".flac", ".mp3", ".ogg")`.
+  iNaturalist serves most of its audio as `audio/mp4`, so all five skipped `.m4a` — and
+  skipped it *silently*, because a missing extension is not an error anywhere: the file is
+  simply never opened and the run reports fewer recordings than the audio dir holds. It
+  lives next to `open_audio_file` because it is a claim about what that loader can decode,
+  and **it must never be narrower than the loader**: librosa 0.11.0 reads `.m4a`/`.mpga`
+  here at the correct duration (55 files checked against ffprobe, 0 mismatches), so the
+  old list was an allowlist, not a format limit.
+  **Do not pre-convert iNat audio any more** — a converted `.wav` left beside its `.m4a`
+  makes the scorer see one recording twice and cut duplicate clips from it.
 - **No BirdNET-Analyzer dependency, on purpose** — this project originally borrowed
   BirdNET-Analyzer's local Perch checkpoint path and its `audio.py` for windowing, but that
   only worked on machines that happened to have that fork installed with a manually-placed
