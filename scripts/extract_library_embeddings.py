@@ -43,10 +43,8 @@ import time
 
 import numpy as np
 
-from perch_head.audio import open_audio_file, split_signal
+from perch_head.audio import AUDIO_EXT, open_audio_file, split_signal
 from perch_head.embed import default_checkpoint_path, perch_embed
-
-AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg")
 
 
 def short_name(class_dir: str) -> str:

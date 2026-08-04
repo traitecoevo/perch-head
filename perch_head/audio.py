@@ -25,6 +25,17 @@ import numpy as np
 
 from perch_head.embed import SAMPLE_RATE, WINDOW_SECONDS
 
+# The one place that decides which files the walkers pick up. It belongs next to
+# `open_audio_file` because it is a claim about what librosa can decode, and it must not be
+# narrower than that: an extension missing here is not an error anywhere, the file is simply
+# never opened, so a whole source silently contributes zero windows.
+#
+# `.m4a`/`.mp4` matter in practice — iNaturalist serves most of its audio as `audio/mp4`,
+# so a list without them drops most of an iNat batch without a word. Verified 2026-08-04:
+# librosa 0.11.0 decodes .m4a and .mpga here at the correct duration (55 files checked
+# against ffprobe, 0 mismatches).
+AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".mp4", ".mpga", ".aac", ".opus")
+
 
 def open_audio_file(path: str, sample_rate: int = SAMPLE_RATE) -> tuple[np.ndarray, int]:
     """Load an audio file as mono float32 at `sample_rate` Hz."""

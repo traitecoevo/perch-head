@@ -10,10 +10,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from perch_head.audio import windows_for_file as _windows_for_file
+from perch_head.audio import AUDIO_EXT, windows_for_file as _windows_for_file
 from perch_head.embed import WINDOW_SECONDS, perch_embed
-
-AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg")
 
 
 @dataclass

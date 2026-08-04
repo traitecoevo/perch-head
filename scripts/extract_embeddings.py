@@ -40,10 +40,8 @@ import sys
 
 import numpy as np
 
-from perch_head.audio import open_audio_file, split_signal
+from perch_head.audio import AUDIO_EXT, open_audio_file, split_signal
 from perch_head.embed import perch_embed
-
-AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg")
 
 
 def _read_lines(path: str) -> list[str]:

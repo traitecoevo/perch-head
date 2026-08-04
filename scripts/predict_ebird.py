@@ -32,7 +32,7 @@ import os
 
 import numpy as np
 
-AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg")
+from perch_head.audio import AUDIO_EXT
 
 
 def iter_audio(root: str):

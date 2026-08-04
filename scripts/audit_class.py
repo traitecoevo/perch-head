@@ -32,7 +32,7 @@ from collections import Counter, defaultdict
 
 import numpy as np
 
-AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg")
+from perch_head.audio import AUDIO_EXT
 
 # '<score>_<rank>_' mining prefix and the trailing '_<start>s_<end>s' window offsets both
 # have to come off before two clips of one parent recording group together.
