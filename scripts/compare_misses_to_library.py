@@ -52,6 +52,18 @@ SPECIES = {
     # is absent here and only `guttata` resolves.
     "zebra finch":            ("Taeniopygia guttata_Zebra Finch", "Taeniopygia guttata"),
     "emu":                    ("Dromaius novaehollandiae_Emu", "Dromaius novaehollandiae"),
+    # The classes where the FOWLERS Perch head is beaten by STOCK Perch on the same
+    # backbone (sarah_soundscapes_combined 6-way, 2026-07-31) — so the gap is the head's
+    # training data, not the embeddings. Which of them are acoustically narrow and which
+    # are merely built from too few recordings is exactly what this script decides.
+    "crested pigeon":         ("Ocyphaps lophotes_Crested Pigeon", "Ocyphaps lophotes"),
+    "stubble quail":          ("Coturnix pectoralis_Stubble Quail", "Coturnix pectoralis"),
+    "brown songlark":         ("Cincloramphus cruralis_Brown Songlark", "Cincloramphus cruralis"),
+    "rufous songlark":        ("Cincloramphus mathewsi_Rufous Songlark", "Cincloramphus mathewsi"),
+    "magpie-lark":            ("Grallina cyanoleuca_Magpie-lark", "Grallina cyanoleuca"),
+    "rufous fieldwren":       ("Calamanthus campestris_Rufous Fieldwren", "Calamanthus campestris"),
+    "yellow-throated miner":  ("Manorina flavigula_Yellow-throated Miner", "Manorina flavigula"),
+    "little buttonquail":     ("Turnix velox_Little Buttonquail", "Turnix velox"),
 }
 
 
