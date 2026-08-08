@@ -29,6 +29,70 @@ import os
 import numpy as np
 
 
+def _sci_prefix(folder: str) -> str:
+    """Library folder is 'Genus species_Common'; scientific part is before the first '_'."""
+    return folder.split("_", 1)[0].strip().lower()
+
+
+def _load_species_list(path: str) -> list[str]:
+    """One binomial per line, '#' comments and blanks skipped, lowercased.
+
+    Same format as extract_embeddings.py --species-list and BirdNET-Analyzer's
+    train --species_list, so one file can scope both arms of a dual run.
+    """
+    with open(path) as f:
+        return [ln.strip().lower() for ln in f if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+def scope_to_species_list(data: dict, species_list: str, unlisted: str) -> dict:
+    """Narrow a full-library cache to one site's species list -- no re-extraction.
+
+    Embedding the library is site-independent and costs ~3 h, so it is paid once and
+    every site recognizer is then a column slice of Y. A window whose only positive
+    class was dropped becomes an all-zero row, which is exactly how this pipeline
+    already encodes a non-event: so "non_event" mode is the slice alone, and the
+    unlisted species keep suppressing the retained ones as hard negatives.
+    "drop" discards those rows instead.
+
+    Rows already all-zero in the cache are the helper/non-event hard negatives
+    (Environment_*, Homo sapiens_*, Noise). They are kept in both modes, which is why
+    the drop mask is built from rows that were positive *before* the slice.
+    """
+    wanted = _load_species_list(species_list)
+    if not wanted:
+        raise SystemExit(f"Species list is empty: {species_list}")
+
+    labels = [str(x) for x in data["labels"]]
+    keep = [i for i, lbl in enumerate(labels) if _sci_prefix(lbl) in wanted]
+
+    missing = sorted(set(wanted) - {_sci_prefix(lbl) for lbl in labels})
+    if missing:
+        print(f"WARNING: {len(missing)} species-list entries have no column in the cache: "
+              f"{missing}")
+    if not keep:
+        raise SystemExit(
+            f"Species list matched none of the cache's {len(labels)} classes. "
+            "Wrong list, or a cache built from a different library?")
+
+    Y = data["Y"]
+    was_positive = Y.any(axis=1)
+    Y = Y[:, keep]
+    rows = np.ones(len(Y), dtype=bool)
+    if unlisted == "drop":
+        rows = ~(was_positive & ~Y.any(axis=1))
+
+    scoped = dict(data)
+    scoped["X"] = data["X"][rows]
+    scoped["Y"] = Y[rows]
+    scoped["labels"] = np.array([labels[i] for i in keep])
+    # Every retained class is one the site wants detected, so all of them are present.
+    scoped["is_present"] = np.ones(len(keep), dtype=bool)
+    scoped["split"] = data["split"][rows]
+    print(f"Species list {os.path.basename(species_list)}: {len(keep)} of {len(labels)} "
+          f"classes kept ({unlisted} mode), {int(rows.sum())} of {len(rows)} rows.")
+    return scoped
+
+
 def _build(input_size: int, n_classes: int, hidden: int, dropout: float):
     import keras
     reg = keras.regularizers.l2(1e-5)
@@ -149,9 +213,15 @@ def train_one(recipe: str, name: str, data: dict, args) -> dict:
 
     os.makedirs(args.out_dir, exist_ok=True)
     out = os.path.join(args.out_dir, f"{name}.npz")
+    # Which species list scoped this head, and what happened to the classes it left out.
+    # Without these the head's vocabulary is only recoverable by diffing its labels
+    # against the library it came from.
     np.savez_compressed(out, W1=W1, b1=b1, W2=W2, b2=b2, labels=labels,
                         is_present=is_present, l2norm=np.array(args.l2norm),
-                        recipe=np.array(recipe), val_auprc=np.array(auprc))
+                        recipe=np.array(recipe), val_auprc=np.array(auprc),
+                        species_list=np.array(args.species_list or ""),
+                        unlisted_handling=np.array(
+                            args.unlisted if args.species_list else ""))
     labels_txt = os.path.join(args.out_dir, f"{name}_Labels.txt")
     with open(labels_txt, "w") as f:
         f.write("\n".join(str(x) for x in labels) + "\n")
@@ -178,11 +248,24 @@ def main():
     ap.add_argument("--alpha", type=float, default=0.25)
     ap.add_argument("--upsample-ratio", type=float, default=0.4)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--species-list", default="",
+                    help="restrict this head to a subset of the cache's classes -- a "
+                         "site-scoped recognizer off a shared full-library cache. One "
+                         "scientific binomial per line, '#' comments ignored. Same file "
+                         "format the BirdNET arm's train --species_list takes.")
+    ap.add_argument("--unlisted", choices=("non_event", "drop"), default="non_event",
+                    help="what to do with cache classes absent from --species-list: "
+                         "'non_event' keeps their windows as all-zero hard negatives so "
+                         "they still suppress the retained species; 'drop' discards them. "
+                         "Ignored without --species-list.")
     args = ap.parse_args()
 
     data = dict(np.load(args.npz))
     print(f"Loaded {args.npz}: X {data['X'].shape}  Y {data['Y'].shape}  "
           f"present {int(data['is_present'].sum())}  l2norm={args.l2norm}")
+
+    if args.species_list:
+        data = scope_to_species_list(data, args.species_list, args.unlisted)
 
     recipes = ["a", "b"] if args.recipe == "both" else [args.recipe]
     results = [train_one(r, args.name if len(recipes) == 1 else f"{args.name}{r}", data, args) for r in recipes]
