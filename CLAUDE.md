@@ -110,15 +110,44 @@ tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `doc
 
 ## Design decisions worth knowing before changing extraction/training defaults
 
-> **Dual-arm run contract:** `runs/CLAUDE.md` (the `run_dual.sh` orchestrator) sets the
-> defaults for a paired BirdNET+Perch run — the Perch arm's `--species-list` names **all**
-> `reallybig` classes, which the runner now derives from the library at launch rather than
-> reading a checked-in file (a stale list silently shrinks `is_present`, and with it the
-> headline AUPRC, without changing the model). `configs/species/` still holds the scoped
-> lists, which is what `--species-list` is for. `Environment_*`/`Homo sapiens_*`/`Noise`
-> stay non-events (the all-zero-row behavior below). The run also passes `--cap 0` (no
-> per-class cap), so the head sees the whole library like the BirdNET arm does.
-> See `~/Documents/ecoacoustics/runs/CLAUDE.md` § "Run defaults"; keep the two in sync.
+> **Dual-arm run contract:** `training_runs/CLAUDE.md` (the `run_dual.sh` orchestrator) sets
+> the defaults for a paired BirdNET+Perch run — `extract_embeddings.py --species-list` names
+> **all** library classes, derived from the library at launch rather than read from a
+> checked-in file (a stale list silently shrinks `is_present`, and with it the headline
+> AUPRC, without changing the model). The runner now passes `--n-distractors 0`, not `-1`:
+> with the full vocabulary the distractor pool is empty so the two are identical, but `0`
+> cannot silently resurrect classes the vocabulary left out. `Environment_*`/
+> `Homo sapiens_*`/`Noise` stay non-events (the all-zero-row behavior below), and `--cap 0`
+> keeps the head seeing the whole library like the BirdNET arm does.
+> See `~/Documents/ecoacoustics/training_runs/CLAUDE.md` § "Run defaults"; keep the two in sync.
+
+### Site-scoped heads — `train_head.py --species-list` (added 2026-08-08)
+
+**The site filter belongs on the CACHE, not on extraction.** Embedding the library is
+site-independent (frozen backbone) and costs ~3 h, so it is paid once and every site
+recognizer is a column slice of `Y`:
+
+```bash
+scripts/train_head.py --npz shared_cache.npz --name wilddeserts0-1-ph \
+    --species-list configs/species/wilddeserts.txt        # --unlisted non_event (default)
+```
+
+A window whose only positive class was dropped becomes an all-zero row — which is already
+how this pipeline encodes a non-event — so `non_event` mode is the slice alone and the
+unlisted species keep suppressing the retained ones as hard negatives. `--unlisted drop`
+discards those rows instead. Rows *already* all-zero are the helper hard negatives and are
+kept in both modes, which is why the drop mask is built from rows positive **before** the
+slice. `is_present` is set True for every retained class: with a site list, every remaining
+column is one the site wants detected.
+
+The species list and mode are recorded in the head npz (`species_list`,
+`unlisted_handling`) — neither the cache nor the head previously recorded anything about
+how its vocabulary was chosen.
+
+⚠️ `extract_embeddings.py --species-list` is a **different** thing: it sets the cache's
+vocabulary (present vs distractor). For site scoping, leave it at the full library and
+scope in `train_head.py`. The "demote unlisted species to non-events at extraction time"
+mode still does not exist there — only the cache path supports it.
 
 - **Zero-pad short clips to Perch's 5 s window, end-aligned, not normalized** — verified
   empirically not to shift embeddings away from real field windows of the same species
