@@ -83,6 +83,47 @@ def _embed_batched(windows: list[np.ndarray], batch: int) -> np.ndarray:
     return np.concatenate(embs, axis=0) if embs else np.zeros((0, 1536), dtype="float32")
 
 
+# ---------------------------------------------------------------- checkpointing
+#
+# A whole-library pass is ~9 hours at ~2.7 clips/s, and the npz used to be written
+# once at the very end -- so a crash at hour 8 produced NOTHING and the run had to
+# start over. Shard per class instead: finish a class, write its shard, and a
+# restart skips it. The final merge is the only step that needs all of them.
+#
+# The resume key is the class's INPUT file list, not just the shard's existence.
+# This library is actively curated -- clips get promoted, pruned and relabelled
+# between runs -- so a shard whose class has since changed on disk is stale and
+# must be re-embedded. Comparing the sorted list catches that; a bare
+# `os.path.exists` would silently pin the class to whatever it held last time.
+
+def _shard_path(shard_dir: str, cls: str) -> str:
+    return os.path.join(shard_dir, cls + ".npz")
+
+
+def _load_shard(path: str, src_files: list[str]) -> tuple[np.ndarray, list[str]] | None:
+    """(emb, kept) if the shard is present and still matches the class on disk."""
+    if not os.path.exists(path):
+        return None
+    try:
+        z = np.load(path, allow_pickle=True)
+        if list(z["src"]) != src_files:      # class changed since -- re-embed
+            return None
+        return z["emb"], list(z["files"])
+    except Exception:                        # truncated by a crash mid-write
+        return None
+
+
+def _save_shard(path: str, emb: np.ndarray, kept: list[str], src_files: list[str]) -> None:
+    """Write via tmp + rename, so a kill mid-write cannot leave a half shard that
+    the next run would read back as complete."""
+    # The suffix must stay '.npz': np.savez APPENDS '.npz' to any name lacking it,
+    # so a '.tmp' temp name is written as '.tmp.npz' and the rename below then
+    # looks for a file that was never created.
+    tmp = path + ".tmp.npz"
+    np.savez(tmp, emb=emb, files=np.array(kept), src=np.array(src_files))
+    os.replace(tmp, path)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -92,14 +133,20 @@ def main() -> None:
     ap.add_argument("--minlen-s", type=float, default=1.0,
                     help="minimum real (non-padded) seconds required to keep a window.")
     ap.add_argument("--embed-batch", type=int, default=64)
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignore existing per-class shards and re-embed everything.")
     args = ap.parse_args()
 
     checkpoint = default_checkpoint_path()
     class_dirs = _class_dirs(args.library)
+    shard_dir = f"{args.output}_shards"
+    os.makedirs(shard_dir, exist_ok=True)
 
     print(f"Model:  {checkpoint}")
     print("Layer:  Perch penultimate embedding  (1536-d)")
     print(f"Input:  {args.library}")
+    print(f"Shards: {shard_dir}"
+          f"{'  (--fresh: ignoring any existing)' if args.fresh else '  (resuming any present)'}")
     print(f"Found {len(class_dirs)} class directories\n")
 
     all_embeddings: dict[str, np.ndarray] = {}
@@ -107,19 +154,39 @@ def main() -> None:
     total_clips_processed = total_clips_failed = 0
     start_time = time.time()
 
+    resumed = 0
     for idx, cls in enumerate(class_dirs):
         cls_dir = os.path.join(args.library, cls)
         files = sorted(f for f in os.listdir(cls_dir) if f.lower().endswith(AUDIO_EXT))
         if args.cap:
             files = files[:args.cap]
+
+        shard = _shard_path(shard_dir, cls)
+        cached = None if args.fresh else _load_shard(shard, files)
+        if cached is not None:
+            emb, kept = cached
+            if len(emb):
+                all_embeddings[cls] = emb
+                all_filenames[cls] = kept
+            total_clips_processed += len(emb)
+            total_clips_failed += len(files) - len(kept)
+            resumed += 1
+            print(f"  [{idx + 1}/{len(class_dirs)}] {short_name(cls):.<45s} "
+                  f"{len(kept):>4d} clips  (shard)", flush=True)
+            continue
+
         windows, kept = _clip_windows(cls_dir, files, args.minlen_s)
         total_clips_failed += len(files) - len(kept)
 
+        emb = np.zeros((0, 1536), dtype="float32")
         if windows:
             emb = _embed_batched(windows, args.embed_batch)
             all_embeddings[cls] = emb
             all_filenames[cls] = kept
             total_clips_processed += len(emb)
+        # Written even when empty, so a class with no readable audio is not retried
+        # on every resume.
+        _save_shard(shard, emb, kept, files)
 
         elapsed = time.time() - start_time
         cps = total_clips_processed / elapsed if elapsed > 0 else 0
@@ -129,6 +196,9 @@ def main() -> None:
             f"{cps:.1f} clips/s, elapsed: {elapsed:.0f}s)",
             flush=True,
         )
+
+    if resumed:
+        print(f"\n  resumed {resumed} class(es) from shards in {shard_dir}")
 
     print("\nEmbedding extraction complete!")
     print(f"  Total clips embedded: {total_clips_processed}")
