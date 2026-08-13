@@ -14,9 +14,25 @@ Windows are Perch-native 5 s. `--hop` under 5 gives overlapping windows so a cal
 localised to better than one window length -- the cutter centres its clip on the window
 midpoint, so a coarse hop puts the call off-centre.
 
-Codes are eBird 2021 and lag current taxonomy (Australian Pipit is `auspip1` here,
-`auspip3` now). `--scientific` is what gets written to the CSV, so it can carry the
-current name regardless of what the checkpoint calls it.
+MEMORY, and the failure that cost 2.6 h on 2026-08-12. This script used to stack *every
+window of a file* into a single model call. That is fine for XC-length clips and lethal on
+an archive pool: a 504 s Macaulay asset at `--hop 1.0` is a 500-window call, and the
+activations for that on a 16 GB machine drove swap to 16.5 of 17.4 GB. Throughput collapsed
+to ~0.7x real-time -- roughly 25x slower than the same backbone's documented 17.8-20.6x on
+the Fowlers and Wild Deserts passes -- and the tell was pathological, because the process
+looked healthy the whole time: 400%+ CPU, RSS climbing, no error. Watch `sysctl
+vm.swapusage`, not %CPU. Windows are now chunked at `--batch` (64, as in predict.py), which
+makes peak memory independent of how long the longest recording is.
+
+`--hop` costs time linearly, so pick it for the job: 1.0 to localise a call tightly inside a
+known-good recording, 2.5 to mine a large pool for its best window per recording (what the
+Fowlers/Wild Deserts passes used). At 2.5 the 5 s windows still overlap 50%, so nothing
+shorter than 2.5 s can straddle two windows and be missed by both.
+
+Codes are eBird 2021 and lag current taxonomy (Australian Pipit is `auspip1` here, and
+`auspip2` now -- NOT `auspip3`, which is New Zealand Pipit, a different bird).
+`--scientific` is what gets written to the CSV, so it can carry the current name regardless
+of what the checkpoint calls it.
 
 Usage:
   .venv/bin/python scripts/predict_ebird.py --audio DIR --code ausgre1 \
@@ -54,6 +70,10 @@ def main():
     ap.add_argument("--out", required=True, help="output score CSV.")
     ap.add_argument("--hop", type=float, default=1.0,
                     help="seconds between window starts; <5 overlaps (default 1.0).")
+    ap.add_argument("--batch", type=int, default=64,
+                    help="windows per model call (default 64, as predict.py). See the "
+                         "note in the module docstring -- this is a memory bound, not a "
+                         "speed knob, and raising it is how the script used to thrash.")
     ap.add_argument("--checkpoint", default=None)
     args = ap.parse_args()
 
@@ -71,40 +91,49 @@ def main():
     serving = tf.saved_model.load(ckpt).signatures["serving_default"]
     hop_samples = max(1, int(args.hop * SAMPLE_RATE))
 
-    rows = []
-    for path in iter_audio(args.audio):
-        try:
-            sig, _ = open_audio_file(path)
-        except Exception as exc:
-            print(f"  !! {os.path.basename(path)}: {exc}")
-            continue
-        # a clip shorter than one window is zero-padded rather than skipped: short
-        # Macaulay/XC cuts are often the entire vocalisation
-        if len(sig) < WINDOW_SAMPLES:
-            sig = np.pad(sig, (0, WINDOW_SAMPLES - len(sig)))
-        starts = list(range(0, len(sig) - WINDOW_SAMPLES + 1, hop_samples))
-        batch = np.stack([sig[s:s + WINDOW_SAMPLES] for s in starts]).astype("float32")
-        logits = serving(inputs=tf.constant(batch))["label"].numpy()[:, target]
-        for s, lg in zip(starts, logits):
-            t = s / SAMPLE_RATE
-            rows.append({
-                "file": path,
-                "start_s": round(t, 3),
-                "end_s": round(t + WINDOW_SAMPLES / SAMPLE_RATE, 3),
-                "scientific": args.scientific,
-                "common": args.common,
-                "score": round(float(lg), 4),
-            })
-        print(f"  {os.path.basename(path):44s} {len(starts):4d} windows  "
-              f"peak {logits.max():6.2f}  median {np.median(logits):6.2f}")
-
-    if not rows:
-        raise SystemExit("no windows scored")
+    n_rows = 0
+    fields = ["file", "start_s", "end_s", "scientific", "common", "score"]
+    # Stream to the CSV instead of accumulating every row: a long pool is hours of work,
+    # and a run that only writes at the end loses all of it to one kill or one OOM.
     with open(args.out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w = csv.DictWriter(fh, fieldnames=fields)
         w.writeheader()
-        w.writerows(rows)
-    print(f"\nwrote {len(rows)} rows -> {args.out}")
+        for path in iter_audio(args.audio):
+            try:
+                sig, _ = open_audio_file(path)
+            except Exception as exc:
+                print(f"  !! {os.path.basename(path)}: {exc}", flush=True)
+                continue
+            # a clip shorter than one window is zero-padded rather than skipped: short
+            # Macaulay/XC cuts are often the entire vocalisation
+            if len(sig) < WINDOW_SAMPLES:
+                sig = np.pad(sig, (0, WINDOW_SAMPLES - len(sig)))
+            starts = list(range(0, len(sig) - WINDOW_SAMPLES + 1, hop_samples))
+            logits = np.empty(len(starts), dtype="float32")
+            for i in range(0, len(starts), args.batch):
+                chunk = starts[i:i + args.batch]
+                block = np.stack([sig[s:s + WINDOW_SAMPLES]
+                                  for s in chunk]).astype("float32")
+                logits[i:i + len(chunk)] = (
+                    serving(inputs=tf.constant(block))["label"].numpy()[:, target])
+            for s, lg in zip(starts, logits):
+                t = s / SAMPLE_RATE
+                w.writerow({
+                    "file": path,
+                    "start_s": round(t, 3),
+                    "end_s": round(t + WINDOW_SAMPLES / SAMPLE_RATE, 3),
+                    "scientific": args.scientific,
+                    "common": args.common,
+                    "score": round(float(lg), 4),
+                })
+                n_rows += 1
+            fh.flush()
+            print(f"  {os.path.basename(path):44s} {len(starts):4d} windows  "
+                  f"peak {logits.max():6.2f}  median {np.median(logits):6.2f}", flush=True)
+
+    if not n_rows:
+        raise SystemExit("no windows scored")
+    print(f"\nwrote {n_rows} rows -> {args.out}")
 
 
 if __name__ == "__main__":
