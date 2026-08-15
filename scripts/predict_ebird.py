@@ -64,7 +64,12 @@ def iter_audio(root: str):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--audio", required=True, help="audio file or folder (walked recursively).")
-    ap.add_argument("--code", required=True, help="eBird-2021 code, e.g. ausgre1.")
+    ap.add_argument("--code", help="eBird-2021 code, e.g. ausgre1.")
+    ap.add_argument("--label", help="Perch class by SCIENTIFIC NAME, e.g. 'Psephotellus varius'. "
+                    "Use when the species has no eBird code in the checkpoint: Perch carries "
+                    "14795 classes but `perch_v2_ebird_classes.csv` says `no_ebird_code` for "
+                    "some of them (Mulga Parrot, row 11239), so a code-only lookup makes a "
+                    "species unscoreable that the model actually has a head for.")
     ap.add_argument("--scientific", required=True, help="scientific name to WRITE (current taxonomy).")
     ap.add_argument("--common", default="", help="common name to write.")
     ap.add_argument("--out", required=True, help="output score CSV.")
@@ -82,11 +87,21 @@ def main():
     from perch_head.embed import SAMPLE_RATE, WINDOW_SAMPLES, default_checkpoint_path
 
     ckpt = args.checkpoint or default_checkpoint_path()
-    with open(os.path.join(ckpt, "assets", "perch_v2_ebird_classes.csv")) as fh:
-        codes = [line.strip() for line in fh][1:]
-    if args.code not in codes:
-        raise SystemExit(f"{args.code!r} is not a Perch eBird-2021 class")
-    target = codes.index(args.code)
+    if not args.code and not args.label:
+        raise SystemExit("pass --code or --label")
+    if args.label:
+        with open(os.path.join(ckpt, "assets", "labels.csv")) as fh:
+            labels = [line.strip() for line in fh][1:]
+        if args.label not in labels:
+            near = [l for l in labels if l.split()[0] == args.label.split()[0]][:5]
+            raise SystemExit(f"{args.label!r} is not a Perch class. Near: {near}")
+        target = labels.index(args.label)
+    else:
+        with open(os.path.join(ckpt, "assets", "perch_v2_ebird_classes.csv")) as fh:
+            codes = [line.strip() for line in fh][1:]
+        if args.code not in codes:
+            raise SystemExit(f"{args.code!r} is not a Perch eBird-2021 class")
+        target = codes.index(args.code)
 
     serving = tf.saved_model.load(ckpt).signatures["serving_default"]
     hop_samples = max(1, int(args.hop * SAMPLE_RATE))
