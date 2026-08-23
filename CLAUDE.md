@@ -121,6 +121,52 @@ tried and rejected (recipe B at scale, L2-norm's ranking/recall trade-off): `doc
 > keeps the head seeing the whole library like the BirdNET arm does.
 > See `~/Documents/ecoacoustics/training_runs/CLAUDE.md` § "Run defaults"; keep the two in sync.
 
+### `--upsample-ratio` is anchored to the LARGEST class — growing one class re-balances all
+
+`_upsample_repeat` sets `min_samples = int(max(counts) * ratio)`, so the per-class floor is a
+fraction of whatever the biggest class happens to be. **Adding clips to one class therefore
+changes the training recipe for every other class**, and nothing says so beyond the
+`min/class` number in the recipe line.
+
+Measured 2026-08-23 while testing whether library volume helps: restoring archived clips to
+two classes (Brown Songlark 400→672, Australian Magpie 400→809 clips) made Australian Magpie
+the largest class at 648 train rows, against Noisy Miner's previous 336. At the default
+`--upsample-ratio 0.4` that lifted the floor from **134 to 259**, and all 433 classes were
+upsampled harder: **77,507 → 118,254 train rows, +53%**. The intended experiment was "more
+data for two classes"; what ran was that plus a 53% larger, differently balanced training set
+for everything.
+
+**It is invisible on the headline** — macro in-vocab AUPRC moved z = −0.9, i.e. nothing. What
+caught it was a negative control: 6 of 43 species whose data had not changed moved beyond
+|z|>3 of the seed-noise band, bidirectionally, which no data error in the changed classes
+could produce.
+
+**Before comparing two fits, check the recipe line's `min/class` matches.** To hold it fixed
+when class sizes change, solve for the ratio: `ratio = old_floor / new_max_count` (that run
+used `--upsample-ratio 0.206790` to get `int(648 × 0.206790) = 134`). This applies to *any*
+intervention that changes class sizes — a sourcing batch, a re-prune, a restore — and `--cap 0`
+(the dual-arm run default) makes it more likely, not less, since nothing bounds the largest
+class.
+
+### The seed-only noise band is the wrong yardstick for a data change
+
+Refits differing only by `--seed` hold the data **and** the train/val split fixed, so their
+spread is the smallest possible source of variation — measured 2026-08-23 at macro in-vocab
+SD **0.0025** over three fits, per-species SD 0.002–0.025 on a 51-species soundscape.
+
+That band does not cover a data change. Even after the upsampling confound above was
+corrected, 3 of 43 species whose data was untouched still moved beyond |z|>3 of it, and 13
+beyond |z|>2 (≈2 expected). The shared 2048-unit hidden layer re-organises whenever any
+class's data changes, so unrelated classes move.
+
+`scripts/make_null_cache.py` builds the band that *is* valid: it resamples the changed
+classes' rows from a larger pool **at constant count**, holding class sizes (and so the
+upsampling floor) and the train/val proportion identical to the control, so the only
+difference is which clips those classes contribute. Refit, score, and the spread of the
+unchanged classes is the honest yardstick. It is also the null a composition experiment must
+beat — a diversity-optimised re-prune has to outperform a random re-draw at the same count,
+not merely differ from the control.
+
 ### Site-scoped heads — `train_head.py --species-list` (added 2026-08-08)
 
 **The site filter belongs on the CACHE, not on extraction.** Embedding the library is
