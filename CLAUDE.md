@@ -141,6 +141,19 @@ caught it was a negative control: 6 of 43 species whose data had not changed mov
 |z|>3 of the seed-noise band, bidirectionally, which no data error in the changed classes
 could produce.
 
+It recurred immediately. The seven-class Arm C restore (2026-08-23) made White-winged
+Fairywren the largest at **726** train rows, where the stock `0.4` would have set the floor to
+**290** — 2.2× the control's. **Do not hand-compute the ratio per arm; derive it from the cache
+the fit will actually read**, which is what `out/run0-9/armC_run.sh` does:
+
+```python
+tr = d["split"] == "train"; mx = int(d["Y"][tr].sum(axis=0).max())
+r = 134.5 / mx; assert int(mx * r) == 134     # 134.5 lands mid-bin, so int() is stable
+```
+
+That reproduces both known caches exactly: control `336 → 0.400298` (the stock 0.4's floor)
+and Arm B `648 → 0.207562` (the 0.206790 used by hand).
+
 **Before comparing two fits, check the recipe line's `min/class` matches.** To hold it fixed
 when class sizes change, solve for the ratio: `ratio = old_floor / new_max_count` (that run
 used `--upsample-ratio 0.206790` to get `int(648 × 0.206790) = 134`). This applies to *any*
