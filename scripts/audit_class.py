@@ -1,14 +1,17 @@
-"""Second-opinion a labeled audio class with Perch's NATIVE eBird head -> per-clip CSV.
+"""Second-opinion a labeled audio class with Perch's own classifier head -> per-clip CSV.
 
-No trained head involved: Perch's `serving_default` returns `label` (14795 eBird-2021
-logits) alongside `embedding`, so a class assembled elsewhere can be audited without
-this repo knowing anything about that library's label vocabulary.
+No trained head involved: Perch's `serving_default` returns `label` (14795 logits over the
+`inat2024_fsd50k` label space -- iNat 2024 binomials, birds and otherwise, plus 198 FSD50k
+sound-event classes) alongside `embedding`, so a class assembled elsewhere can be audited
+without this repo knowing anything about that library's label vocabulary.
 
 Read the result ASYMMETRICALLY. "this is actually <common species>" is evidence;
 "yes, it's the target" is NOT clearance -- Perch's reliability on a species tracks that
 species' recording supply, so a thinly-recorded target has a weak head here. Two further
-cautions: the class list is eBird 2021, so codes lag current taxonomy (Australian Pipit
-is `auspip1` here, `auspip3` now); and a high target logit does not mean the target is
+cautions: eBird codes are a lookup over that label space, not the space itself (5089 rows
+read `no_ebird_code`, which is what `--label` exists for) and the 2021 codes lag current
+taxonomy (Australian Pipit is `auspip1` here, `auspip3` now); and a high target logit does
+not mean the target is
 the loudest thing in the window, which is why this reports RANK and MARGIN rather than
 the target score alone.
 

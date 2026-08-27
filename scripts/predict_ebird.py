@@ -1,9 +1,17 @@
-"""Score audio with Perch's NATIVE eBird head -> a score CSV the assembly-pipeline cutters read.
+"""Score audio with Perch's own classifier head -> a score CSV the assembly-pipeline cutters read.
 
 Sibling of predict.py, which runs a *trained* head. This one needs no head at all: Perch's
-`serving_default` exposes 14795 eBird-2021 logits directly, so a species can be mined
+`serving_default` exposes all 14795 class logits directly, so a species can be mined
 before any custom head knows about it -- useful for a class being rebuilt, and as a second
 opinion independent of whichever recognizer mined the class in the first place.
+
+NOT an "eBird head", despite this script's name and its `--code` flag. The label space is
+`assets/labels.csv`, whose own header names it `inat2024_fsd50k`: scientific binomials from
+iNaturalist 2024 (birds, but also frogs, mammals, insects -- class 0 is *Abavorana
+luctuosa*) plus 198 FSD50k sound-event classes (`Wind`, `Aircraft`, `Applause`). eBird is a
+lookup table over that space, not the space itself: `assets/perch_v2_ebird_classes.csv` is a
+parallel column of eBird-2021 codes in which **5089 of the 14795 rows read `no_ebird_code`**.
+That is what `--label` is for; see below.
 
 Output is the `predict.py` schema (`file,start_s,end_s,scientific,common,score`), which
 `Training_library_assembly_pipeline/species/clip_common.py` sniffs. Pair it with
