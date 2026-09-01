@@ -83,7 +83,11 @@ class EnsembleHead:
             raise NotImplementedError(
                 f"{path}: blend_with={scorer.blend_with!r} has no inference path in "
                 "perch-head yet (only a stock-Perch partner is supported).")
-        scorer.bind_partner(stock_perch_labels())
+        # The head's own labels are 'Genus species_Common Name'; stock Perch's are plain
+        # binomials. Without `key` the join compares those two shapes directly and silently
+        # matches almost nothing -- see EnsembleScorer.bind_partner's docstring.
+        strip_common_name = lambda s: s.split("_", 1)[0].strip()
+        scorer.bind_partner(stock_perch_labels(), key=strip_common_name)
         return cls(scorer=scorer, labels=scorer.labels, is_present=scorer.artifact.is_present)
 
     def predict_windows(self, windows: np.ndarray, batch: int = 64) -> np.ndarray:

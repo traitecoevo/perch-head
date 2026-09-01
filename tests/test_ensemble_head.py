@@ -12,6 +12,11 @@ from score_ensemble.artifact import write_artifact
 from perch_head import inference as inf
 from perch_head.inference import EnsembleHead, Head
 
+# Matches EnsembleHead.load's own key: the head's labels are 'Genus species_Common Name',
+# stock Perch's are plain binomials. write_artifact and bind_partner must agree on this, or
+# `expect_shared` (computed at write time) describes a different join than the one that runs.
+_STRIP_COMMON_NAME = lambda s: s.split("_", 1)[0].strip()
+
 
 def _fake_head_npz(path, labels, n_hidden=4, in_dim=6):
     n = len(labels)
@@ -38,13 +43,16 @@ def test_head_load_detects_an_ensemble_artifact_and_returns_ensemble_head(tmp_pa
     head_path = tmp_path / "head.npz"
     labels = ["Genus a_Common A", "Genus b_Common B"]
     _fake_head_npz(head_path, labels)
-    partner_labels = ["Genus a_Common A", "Genus z_Common Z", "Genus b_Common B"]
+    # Realistic: stock Perch's own labels are PLAIN binomials, no common-name suffix -- unlike
+    # the head's own labels. A test that gives the partner suffixed labels too would not have
+    # caught the real bug (bind_partner joining raw strings, which matched almost nothing).
+    partner_labels = ["Genus a", "Genus z", "Genus b"]
 
     art_path = tmp_path / "head-ens.npz"
     write_artifact(str(art_path), head_npz_path=str(head_path), blend_with="perch",
                    combiner="gmean", columns_from="head", head_space="logit",
                    partner_space="probability", output_space="logit",
-                   partner_labels=partner_labels)
+                   partner_labels=partner_labels, key=_STRIP_COMMON_NAME)
 
     monkeypatch.setattr(inf, "stock_perch_labels", lambda: partner_labels)
 
@@ -58,13 +66,16 @@ def test_ensemble_head_predict_windows_combines_both_taps(tmp_path, monkeypatch)
     head_path = tmp_path / "head.npz"
     labels = ["Genus a_Common A", "Genus b_Common B"]
     _fake_head_npz(head_path, labels)
-    partner_labels = ["Genus a_Common A", "Genus z_Common Z", "Genus b_Common B"]
+    # Realistic: stock Perch's own labels are PLAIN binomials, no common-name suffix -- unlike
+    # the head's own labels. A test that gives the partner suffixed labels too would not have
+    # caught the real bug (bind_partner joining raw strings, which matched almost nothing).
+    partner_labels = ["Genus a", "Genus z", "Genus b"]
 
     art_path = tmp_path / "head-ens.npz"
     write_artifact(str(art_path), head_npz_path=str(head_path), blend_with="perch",
                    combiner="max", columns_from="head", head_space="logit",
                    partner_space="probability", output_space="logit",
-                   partner_labels=partner_labels)
+                   partner_labels=partner_labels, key=_STRIP_COMMON_NAME)
 
     monkeypatch.setattr(inf, "stock_perch_labels", lambda: partner_labels)
     loaded = Head.load(str(art_path))
@@ -88,7 +99,7 @@ def test_ensemble_head_predict_windows_combines_both_taps(tmp_path, monkeypatch)
     # Reference: run the SAME arithmetic score_ensemble.EnsembleScorer runs, independently.
     from score_ensemble.runtime import EnsembleScorer
     scorer = EnsembleScorer.load(str(art_path))
-    scorer.bind_partner(partner_labels)
+    scorer.bind_partner(partner_labels, key=_STRIP_COMMON_NAME)
     head_logits = scorer.head_logits(fake_emb)
     want_logits = scorer.score_from_taps(head_logits, fake_partner_probs)
     want_probs = 1.0 / (1.0 + np.exp(-np.clip(want_logits, -20, 20)))
