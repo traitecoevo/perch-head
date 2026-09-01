@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from perch_head.audio import AUDIO_EXT, windows_for_file as _windows_for_file
-from perch_head.embed import WINDOW_SECONDS, perch_embed
+from perch_head.embed import WINDOW_SECONDS, perch_embed, perch_embed_and_label, stock_perch_labels
 
 
 @dataclass
@@ -25,14 +25,26 @@ class Head:
     l2norm: bool
 
     @classmethod
-    def load(cls, path: str) -> "Head":
-        d = np.load(path)
-        return cls(
-            W1=d["W1"], b1=d["b1"], W2=d["W2"], b2=d["b2"],
-            labels=[str(x) for x in d["labels"]],
-            is_present=d["is_present"],
-            l2norm=bool(d["l2norm"]),
-        )
+    def load(cls, path: str) -> "Head | EnsembleHead":
+        """Load a plain trained head, OR a score-ensemble artifact (a head plus the fields
+        naming a stock partner and combiner) -- distinguished by the presence of a
+        `blend_with` field. Both return objects share the interface `predict_file` /
+        `predict_windows` actually use (`labels`, `is_present`, `predict_windows`), so
+        `scripts/predict.py` needs no changes to score either kind.
+
+        Checking for `blend_with` needs no `allow_pickle` -- `NpzFile.files` lists archive
+        members without reading any array data. `allow_pickle` stays False for both branches:
+        every field in either format is a plain numeric or fixed-width-string array, so
+        loading a shared head or artifact never executes code."""
+        with np.load(path, allow_pickle=False) as d:
+            if "blend_with" in d.files:
+                return EnsembleHead.load(path)
+            return cls(
+                W1=d["W1"], b1=d["b1"], W2=d["W2"], b2=d["b2"],
+                labels=[str(x) for x in d["labels"]],
+                is_present=d["is_present"],
+                l2norm=bool(d["l2norm"]),
+            )
 
     def predict_embeddings(self, emb: np.ndarray) -> np.ndarray:
         """(n, 1536) Perch embeddings -> (n, n_classes) sigmoid probabilities."""
@@ -50,6 +62,45 @@ class Head:
             embs.append(perch_embed(np.asarray(windows[i:i + batch], dtype="float32")))
         emb = np.concatenate(embs, axis=0) if embs else np.zeros((0, self.W1.shape[0]), dtype="float32")
         return self.predict_embeddings(emb)
+
+
+@dataclass
+class EnsembleHead:
+    """A score-ensemble artifact, scored from ONE `serving_default` call per batch (the
+    embedding tap for the custom head, the native label tap for the stock partner) -- see
+    `score_ensemble`'s docs/artifact-format.md for why this costs about the same as scoring
+    the custom head alone."""
+    scorer: object   # score_ensemble.runtime.EnsembleScorer
+    labels: list[str]
+    is_present: np.ndarray
+
+    @classmethod
+    def load(cls, path: str) -> "EnsembleHead":
+        from score_ensemble.runtime import EnsembleScorer
+
+        scorer = EnsembleScorer.load(path)
+        if scorer.blend_with != "perch":
+            raise NotImplementedError(
+                f"{path}: blend_with={scorer.blend_with!r} has no inference path in "
+                "perch-head yet (only a stock-Perch partner is supported).")
+        # The head's own labels are 'Genus species_Common Name'; stock Perch's are plain
+        # binomials. Without `key` the join compares those two shapes directly and silently
+        # matches almost nothing -- see EnsembleScorer.bind_partner's docstring.
+        strip_common_name = lambda s: s.split("_", 1)[0].strip()
+        scorer.bind_partner(stock_perch_labels(), key=strip_common_name)
+        return cls(scorer=scorer, labels=scorer.labels, is_present=scorer.artifact.is_present)
+
+    def predict_windows(self, windows: np.ndarray, batch: int = 64) -> np.ndarray:
+        """(n, 160000) raw audio windows -> (n, n_classes) sigmoid probabilities."""
+        out = []
+        for i in range(0, len(windows), batch):
+            chunk = np.asarray(windows[i:i + batch], dtype="float32")
+            emb, partner_probs = perch_embed_and_label(chunk)
+            head_logits = self.scorer.head_logits(emb)
+            logits = self.scorer.score_from_taps(head_logits, partner_probs)
+            out.append(1.0 / (1.0 + np.exp(-np.clip(logits, -20, 20))))
+        return (np.concatenate(out, axis=0) if out
+                else np.zeros((0, len(self.labels)), dtype="float32"))
 
 
 def windows_for_file(path: str, sig_minlen: float = 1.0) -> tuple[list[np.ndarray], list[float]]:

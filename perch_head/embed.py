@@ -117,3 +117,33 @@ def perch_embed(data: np.ndarray, model_path: str | None = None) -> np.ndarray:
         inputs=tf.constant(np.asarray(data, dtype="float32"))
     )
     return result["embedding"].numpy().astype("float32")
+
+
+def perch_embed_and_label(data: np.ndarray, model_path: str | None = None):
+    """(n_windows, 160000) float32 -> (embedding (n, 1536), stock label probs (n, 14795)).
+
+    Both taps come off the SAME `serving_default` call — this is what makes scoring a
+    score-ensemble artifact (a custom head + stock Perch) cost about the same as scoring the
+    custom head alone, rather than doubling inference. See `score_ensemble`'s
+    docs/artifact-format.md.
+    """
+    load(model_path)
+    result = _PERCH_EMBED_MODEL.signatures["serving_default"](
+        inputs=tf.constant(np.asarray(data, dtype="float32"))
+    )
+    emb = result["embedding"].numpy().astype("float32")
+    label_probs = tf.nn.softmax(result["label"], axis=-1).numpy().astype("float32")
+    return emb, label_probs
+
+
+def stock_perch_labels(model_path: str | None = None) -> list[str]:
+    """Perch's own native 14795-class head label list (scientific binomials), from the
+    checkpoint's `assets/labels.csv`. Needed to bind a score-ensemble artifact's gather
+    against the live stock model at inference time -- see `EnsembleHead` in `inference.py`.
+    """
+    load(model_path)
+    csv_path = os.path.join(_PERCH_MODEL_PATH, "assets", "labels.csv")
+    with open(csv_path) as f:
+        rows = [line.strip() for line in f if line.strip()]
+    # first row is a header tag, not a binomial, in the shipped labels.csv
+    return rows[1:] if rows and " " not in rows[0] else rows

@@ -17,6 +17,10 @@ dependencies = [
     "soundfile",
     "resampy",       # librosa's res_type="kaiser_fast" resampler
     "kagglehub",     # fetches the Perch v2 checkpoint (google/bird-vocalization-classifier)
+    # Score-level ensembling: the combiner arithmetic and the deployable ensemble artifact
+    # format that Head.load recognises alongside a plain trained head. numpy-only, so it
+    # adds no resolver pressure against the TensorFlow stack above. Not on PyPI.
+    "score-ensemble @ git+https://github.com/traitecoevo/score-ensemble.git@main",
 ]
 
 [project.optional-dependencies]

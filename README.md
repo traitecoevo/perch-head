@@ -69,3 +69,10 @@ tests/                 offline unit tests — `.venv/bin/python -m pytest tests/
   depend on it, and it does not depend on this repo. Training and inference for new heads
   belong here; comparing a trained head against other recognizers on a labeled soundscape
   belongs there.
+- **score-ensemble** (`~/Documents/ecoacoustics/score-ensemble`) — the score-level ensembling
+  method: the combiners, the label-axis join, and the deployable ensemble `.npz` format
+  (a trained head plus the fields naming a stock partner model and a combiner). numpy-only,
+  no TensorFlow dependency of its own, so it installs cleanly into this project's venv
+  alongside everything else. `scripts/predict.py` recognises an ensemble artifact via
+  `score_ensemble.EnsembleScorer` the same way it recognises a plain head — see
+  ECOACOUSTICS.md § "Ensembling two recognizers".
